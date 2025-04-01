@@ -38,7 +38,7 @@ Slideflow is a full-stack web application that generates professional presentati
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/slideflow.git
+git clone https://github.com/GxAditya/HackIndia-Spark-4-2025-SlideFlow.git
 cd slideflow
 ```
 
