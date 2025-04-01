@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { usePresentation } from '@/context/PresentationContext';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,9 +29,6 @@ const PromptInput = () => {
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="prompt" className="block text-lg font-semibold mb-2">
-          Describe your presentation
-        </label>
         <Textarea
           id="prompt"
           placeholder="Enter a detailed description of what you want in your presentation..."

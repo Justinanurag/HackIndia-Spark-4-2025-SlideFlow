@@ -17,7 +17,8 @@ async def create_presentation(
     template_style: str = "corporate", 
     output_path: Optional[str] = None, 
     use_background_images: bool = True,
-    image_placement: ImagePlacementType = "background"
+    image_placement: ImagePlacementType = "background",
+    style_properties: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Create a PowerPoint presentation from the generated content.
@@ -28,6 +29,7 @@ async def create_presentation(
         output_path: Path to save the presentation (optional)
         use_background_images: Whether to use images as slide backgrounds (legacy option)
         image_placement: How to place images in slides ('background', 'side', or 'none')
+        style_properties: Dictionary of custom style properties to apply to the presentation
         
     Returns:
         Path to the created presentation file
@@ -35,10 +37,15 @@ async def create_presentation(
     try:
         from pptx import Presentation
         from pptx.util import Inches, Pt
+        from pptx.dml.color import RGBColor
         
         # For backward compatibility
         if use_background_images and image_placement == "side":
             image_placement = "background"
+        
+        # Get style properties from content_data if not provided directly
+        if style_properties is None and "style" in content_data:
+            style_properties = content_data["style"]
         
         # Create base templates directory if it doesn't exist
         base_template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
@@ -47,10 +54,18 @@ async def create_presentation(
         # Check if the template exists, if not create a basic one
         template_path = os.path.join(base_template_dir, f"{template_style}.pptx")
         if not os.path.exists(template_path):
-            await create_base_template(template_style, template_path)
+            await create_base_template(template_style, template_path, style_properties)
         
         # Load the template
         prs = Presentation(template_path)
+        
+        # Apply any custom style properties to the presentation
+        if style_properties:
+            try:
+                await apply_custom_style_to_presentation(prs, style_properties)
+                print(f"Applied custom style properties to presentation")
+            except Exception as e:
+                print(f"Error applying custom style: {str(e)}")
         
         # Get slide layouts
         title_layout = prs.slide_layouts[0]  # Title slide
@@ -397,125 +412,134 @@ async def add_image_to_slide(
         print(f"Error adding image to slide: {str(e)}")
         # Continue without the image
 
-async def create_base_template(template_style, output_path):
+async def apply_custom_style_to_presentation(prs, style_properties):
+    """Apply custom style properties to the presentation."""
+    from pptx.util import Pt
+    from pptx.dml.color import RGBColor
+    
+    # Helper function to convert hex color to RGB
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    
+    # Apply style to all slide masters
+    for master in prs.slide_masters:
+        # Process all slide layouts in the master
+        for layout in master.slide_layouts:
+            # Get background fill
+            background = layout.background
+            
+            # Set background color if specified
+            bg_color = style_properties.get('backgroundColor') or style_properties.get('background_color')
+            if bg_color and bg_color.startswith('#'):
+                r, g, b = hex_to_rgb(bg_color)
+                background.fill.solid()
+                background.fill.fore_color.rgb = RGBColor(r, g, b)
+            
+            # Apply style to all placeholders in the layout
+            for placeholder in layout.placeholders:
+                # Process title placeholders
+                if placeholder.placeholder_format.type == 1:  # Title placeholder
+                    # Set text color
+                    text_color = style_properties.get('textColor') or style_properties.get('text_color')
+                    if text_color and text_color.startswith('#'):
+                        r, g, b = hex_to_rgb(text_color)
+                        if placeholder.has_text_frame:
+                            for paragraph in placeholder.text_frame.paragraphs:
+                                paragraph.font.color.rgb = RGBColor(r, g, b)
+                    
+                    # Set font family
+                    font_family = style_properties.get('fontFamily') or style_properties.get('font_family')
+                    if font_family and placeholder.has_text_frame:
+                        for paragraph in placeholder.text_frame.paragraphs:
+                            paragraph.font.name = font_family.split(',')[0].strip()
+                    
+                    # Set title font size
+                    title_font_size = style_properties.get('titleFontSize') or style_properties.get('title_font_size')
+                    if title_font_size and placeholder.has_text_frame:
+                        size_value = title_font_size
+                        if isinstance(size_value, str):
+                            # Try to extract numeric value from string like "44pt"
+                            size_value = size_value.replace('pt', '').replace('px', '')
+                            try:
+                                size_value = float(size_value)
+                            except ValueError:
+                                # Fallback to default if can't convert
+                                size_value = 44
+                        
+                        for paragraph in placeholder.text_frame.paragraphs:
+                            paragraph.font.size = Pt(size_value)
+                
+                # Process body placeholders
+                elif placeholder.placeholder_format.type in [2, 3, 7]:  # Body, content or text placeholder
+                    # Set text color
+                    text_color = style_properties.get('textColor') or style_properties.get('text_color')
+                    if text_color and text_color.startswith('#') and placeholder.has_text_frame:
+                        r, g, b = hex_to_rgb(text_color)
+                        for paragraph in placeholder.text_frame.paragraphs:
+                            paragraph.font.color.rgb = RGBColor(r, g, b)
+                    
+                    # Set font family
+                    font_family = style_properties.get('fontFamily') or style_properties.get('font_family')
+                    if font_family and placeholder.has_text_frame:
+                        for paragraph in placeholder.text_frame.paragraphs:
+                            paragraph.font.name = font_family.split(',')[0].strip()
+                    
+                    # Set content font size
+                    content_font_size = style_properties.get('contentFontSize') or style_properties.get('content_font_size')
+                    if content_font_size and placeholder.has_text_frame:
+                        size_value = content_font_size
+                        if isinstance(size_value, str):
+                            # Try to extract numeric value from string like "28pt"
+                            size_value = size_value.replace('pt', '').replace('px', '')
+                            try:
+                                size_value = float(size_value)
+                            except ValueError:
+                                # Fallback to default if can't convert
+                                size_value = 28
+                        
+                        for paragraph in placeholder.text_frame.paragraphs:
+                            paragraph.font.size = Pt(size_value)
+
+    return prs
+
+async def create_base_template(template_style, output_path, style_properties=None):
     """Create a basic template in the specified style."""
     try:
         from pptx import Presentation
         from pptx.util import Inches, Pt
-        from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
         from pptx.dml.color import RGBColor
-        from pptx.enum.shapes import MSO_SHAPE
+        from pptx.enum.text import PP_ALIGN
         
-        # Define style specifications
-        style_specs = {
-            "corporate": {
-                "fonts": {
-                    "title": "Calibri",
-                    "body": "Arial"
-                },
-                "font_sizes": {
-                    "title": Pt(40),
-                    "body": Pt(24)
-                },
-                "colors": {
-                    "title": RGBColor(0, 43, 91),  # Navy blue
-                    "body": RGBColor(51, 51, 51),   # Dark gray
-                    "background": RGBColor(255, 255, 255),  # White
-                    "accent": RGBColor(0, 112, 192)  # Blue accent
-                },
-                "styles": {
-                    "title_bold": True,
-                    "body_bold": False
-                }
-            },
-            "creative": {
-                "fonts": {
-                    "title": "Poppins",
-                    "body": "Open Sans"
-                },
-                "font_sizes": {
-                    "title": Pt(44),
-                    "body": Pt(26)
-                },
-                "colors": {
-                    "title": RGBColor(90, 24, 154),  # Deep purple
-                    "body": RGBColor(0, 128, 128),   # Teal
-                    "background": RGBColor(255, 255, 255),  # White
-                    "accent": RGBColor(255, 51, 102)  # Pink accent
-                },
-                "styles": {
-                    "title_bold": True,
-                    "body_bold": True
-                }
-            },
-            "minimalist": {
-                "fonts": {
-                    "title": "Lato",
-                    "body": "Inter"
-                },
-                "font_sizes": {
-                    "title": Pt(40),
-                    "body": Pt(24)
-                },
-                "colors": {
-                    "title": RGBColor(0, 0, 0),      # Black
-                    "body": RGBColor(68, 68, 68),    # Dark gray
-                    "background": RGBColor(248, 249, 250),  # Light gray
-                    "accent": RGBColor(0, 0, 0)      # Black accent
-                },
-                "styles": {
-                    "title_bold": False,
-                    "body_bold": False
-                }
-            },
-            "academic": {
-                "fonts": {
-                    "title": "Times New Roman",
-                    "body": "Georgia"
-                },
-                "font_sizes": {
-                    "title": Pt(38),
-                    "body": Pt(22)
-                },
-                "colors": {
-                    "title": RGBColor(28, 61, 110),  # Dark blue
-                    "body": RGBColor(0, 0, 0),       # Black
-                    "background": RGBColor(250, 243, 224),  # Light beige
-                    "accent": RGBColor(0, 80, 80)    # Teal accent
-                },
-                "styles": {
-                    "title_bold": True,
-                    "body_bold": False
-                }
-            },
-            "marketing": {
-                "fonts": {
-                    "title": "Raleway",
-                    "body": "Oswald"
-                },
-                "font_sizes": {
-                    "title": Pt(48),
-                    "body": Pt(26)
-                },
-                "colors": {
-                    "title": RGBColor(230, 57, 70),  # Bright red
-                    "body": RGBColor(29, 53, 87),    # Dark blue
-                    "background": RGBColor(255, 255, 255),  # White
-                    "accent": RGBColor(244, 162, 97)  # Orange accent
-                },
-                "styles": {
-                    "title_bold": True,
-                    "body_bold": True
-                }
-            }
-        }
+        # Get template colors based on style
+        colors = get_template_colors(template_style)
         
-        # Use corporate style as default if template_style not found
-        if template_style not in style_specs:
-            template_style = "corporate"
+        # Override with custom style properties if provided
+        if style_properties:
+            primary_color = style_properties.get('primaryColor') or style_properties.get('primary_color')
+            if primary_color and primary_color.startswith('#'):
+                colors['primary'] = primary_color
+            
+            secondary_color = style_properties.get('secondaryColor') or style_properties.get('secondary_color')
+            if secondary_color and secondary_color.startswith('#'):
+                colors['secondary'] = secondary_color
+            
+            accent_color = style_properties.get('accentColor') or style_properties.get('accent_color')
+            if accent_color and accent_color.startswith('#'):
+                colors['accent'] = accent_color
+            
+            bg_color = style_properties.get('backgroundColor') or style_properties.get('background_color')
+            if bg_color and bg_color.startswith('#'):
+                colors['background'] = bg_color
+            
+            text_color = style_properties.get('textColor') or style_properties.get('text_color')
+            if text_color and text_color.startswith('#'):
+                colors['text'] = text_color
         
-        # Get style specifications
-        style = style_specs[template_style]
+        # Helper function to convert hex color to RGB
+        def hex_to_rgb(hex_color):
+            hex_color = hex_color.lstrip('#')
+            return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
         
         # Create a blank presentation
         prs = Presentation()
@@ -535,18 +559,18 @@ async def create_base_template(template_style, output_path):
         # Style title text
         title = title_slide.shapes.title
         title.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
-        title.text_frame.paragraphs[0].font.name = style["fonts"]["title"]
-        title.text_frame.paragraphs[0].font.size = style["font_sizes"]["title"]
-        title.text_frame.paragraphs[0].font.color.rgb = style["colors"]["title"]
-        title.text_frame.paragraphs[0].font.bold = style["styles"]["title_bold"]
+        title.text_frame.paragraphs[0].font.name = colors['fonts']['title']
+        title.text_frame.paragraphs[0].font.size = colors['font_sizes']['title']
+        title.text_frame.paragraphs[0].font.color.rgb = colors['colors']['title']
+        title.text_frame.paragraphs[0].font.bold = colors['styles']['title_bold']
         
         # Style subtitle text
         subtitle = title_slide.placeholders[1]
         subtitle.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
-        subtitle.text_frame.paragraphs[0].font.name = style["fonts"]["body"]
-        subtitle.text_frame.paragraphs[0].font.size = style["font_sizes"]["body"]
-        subtitle.text_frame.paragraphs[0].font.color.rgb = style["colors"]["body"]
-        subtitle.text_frame.paragraphs[0].font.bold = style["styles"]["body_bold"]
+        subtitle.text_frame.paragraphs[0].font.name = colors['fonts']['body']
+        subtitle.text_frame.paragraphs[0].font.size = colors['font_sizes']['body']
+        subtitle.text_frame.paragraphs[0].font.color.rgb = colors['colors']['body']
+        subtitle.text_frame.paragraphs[0].font.bold = colors['styles']['body_bold']
         
         # Create content slide layout
         content_slide_layout = prs.slide_layouts[1]
@@ -561,16 +585,16 @@ async def create_base_template(template_style, output_path):
         
         # Style title text
         title = content_slide.shapes.title
-        title.text_frame.paragraphs[0].font.name = style["fonts"]["title"]
-        title.text_frame.paragraphs[0].font.size = style["font_sizes"]["title"]
-        title.text_frame.paragraphs[0].font.color.rgb = style["colors"]["title"]
-        title.text_frame.paragraphs[0].font.bold = style["styles"]["title_bold"]
+        title.text_frame.paragraphs[0].font.name = colors['fonts']['title']
+        title.text_frame.paragraphs[0].font.size = colors['font_sizes']['title']
+        title.text_frame.paragraphs[0].font.color.rgb = colors['colors']['title']
+        title.text_frame.paragraphs[0].font.bold = colors['styles']['title_bold']
         
         # Style content text
-        content_text.text_frame.paragraphs[0].font.name = style["fonts"]["body"]
-        content_text.text_frame.paragraphs[0].font.size = style["font_sizes"]["body"]
-        content_text.text_frame.paragraphs[0].font.color.rgb = style["colors"]["body"]
-        content_text.text_frame.paragraphs[0].font.bold = style["styles"]["body_bold"]
+        content_text.text_frame.paragraphs[0].font.name = colors['fonts']['body']
+        content_text.text_frame.paragraphs[0].font.size = colors['font_sizes']['body']
+        content_text.text_frame.paragraphs[0].font.color.rgb = colors['colors']['body']
+        content_text.text_frame.paragraphs[0].font.bold = colors['styles']['body_bold']
         
         # Save the template
         prs.save(output_path)
@@ -748,4 +772,256 @@ async def export_to_pdf(content_data: Dict[str, Any], template_style: str, outpu
         
     except Exception as e:
         print(f"Error creating PDF: {str(e)}")
+        raise
+
+def get_template_colors(template_style):
+    """Get colors and style information for the specified template style."""
+    from pptx.util import Pt
+    from pptx.dml.color import RGBColor
+    
+    # Helper function to convert hex to RGB
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    
+    # Define template styles
+    templates = {
+        "corporate": {
+            "primary": "#0F62FE",
+            "secondary": "#6F6F6F",
+            "accent": "#4589FF",
+            "background": "#FFFFFF",
+            "text": "#002B5B",
+            "fonts": {
+                "title": "Calibri",
+                "body": "Arial"
+            },
+            "font_sizes": {
+                "title": Pt(40),
+                "body": Pt(24)
+            },
+            "styles": {
+                "title_bold": True,
+                "body_bold": False
+            }
+        },
+        "creative": {
+            "primary": "#FF3366",
+            "secondary": "#9C27B0",
+            "accent": "#FFCC00",
+            "background": "#F5F5F5",
+            "text": "#5A189A",
+            "fonts": {
+                "title": "Poppins",
+                "body": "Open Sans"
+            },
+            "font_sizes": {
+                "title": Pt(44),
+                "body": Pt(26)
+            },
+            "styles": {
+                "title_bold": True,
+                "body_bold": False
+            }
+        },
+        "minimalist": {
+            "primary": "#212121",
+            "secondary": "#757575",
+            "accent": "#BDBDBD",
+            "background": "#FFFFFF",
+            "text": "#444444",
+            "fonts": {
+                "title": "Helvetica",
+                "body": "Arial"
+            },
+            "font_sizes": {
+                "title": Pt(40),
+                "body": Pt(24)
+            },
+            "styles": {
+                "title_bold": False,
+                "body_bold": False
+            }
+        },
+        "academic": {
+            "primary": "#006064",
+            "secondary": "#00897B",
+            "accent": "#4DD0E1",
+            "background": "#FAF3E0",
+            "text": "#1C3D6E",
+            "fonts": {
+                "title": "Times New Roman",
+                "body": "Georgia"
+            },
+            "font_sizes": {
+                "title": Pt(38),
+                "body": Pt(22)
+            },
+            "styles": {
+                "title_bold": True,
+                "body_bold": False
+            }
+        },
+        "marketing": {
+            "primary": "#FF5722",
+            "secondary": "#FF9800",
+            "accent": "#FFC107",
+            "background": "#FFFFFF",
+            "text": "#E63946",
+            "fonts": {
+                "title": "Impact",
+                "body": "Arial"
+            },
+            "font_sizes": {
+                "title": Pt(44),
+                "body": Pt(26)
+            },
+            "styles": {
+                "title_bold": True,
+                "body_bold": False
+            }
+        },
+        "techStartup": {
+            "primary": "#00A8E8",
+            "secondary": "#1E1E1E",
+            "accent": "#2ECC71",
+            "background": "#1E1E1E",
+            "text": "#00A8E8",
+            "fonts": {
+                "title": "Arial",
+                "body": "Verdana"
+            },
+            "font_sizes": {
+                "title": Pt(42),
+                "body": Pt(24)
+            },
+            "styles": {
+                "title_bold": True,
+                "body_bold": False
+            }
+        }
+    }
+    
+    # Use corporate as default if template not found
+    template_data = templates.get(template_style, templates["corporate"])
+    
+    # Convert hex colors to RGB
+    colors = {
+        "primary": template_data["primary"],
+        "secondary": template_data["secondary"],
+        "accent": template_data["accent"],
+        "background": template_data["background"],
+        "text": template_data["text"],
+        "fonts": template_data["fonts"],
+        "font_sizes": template_data["font_sizes"],
+        "styles": template_data["styles"],
+        "colors": {
+            "title": RGBColor(*hex_to_rgb(template_data["text"])),
+            "body": RGBColor(*hex_to_rgb(template_data["text"])),
+            "background": RGBColor(*hex_to_rgb(template_data["background"])),
+            "accent": RGBColor(*hex_to_rgb(template_data["accent"]))
+        }
+    }
+    
+    return colors
+        
+async def create_base_template(template_style, output_path, style_properties=None):
+    """Create a basic template in the specified style."""
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        from pptx.dml.color import RGBColor
+        from pptx.enum.text import PP_ALIGN
+        
+        # Get template colors based on style
+        colors = get_template_colors(template_style)
+        
+        # Override with custom style properties if provided
+        if style_properties:
+            primary_color = style_properties.get('primaryColor') or style_properties.get('primary_color')
+            if primary_color and primary_color.startswith('#'):
+                colors['primary'] = primary_color
+            
+            secondary_color = style_properties.get('secondaryColor') or style_properties.get('secondary_color')
+            if secondary_color and secondary_color.startswith('#'):
+                colors['secondary'] = secondary_color
+            
+            accent_color = style_properties.get('accentColor') or style_properties.get('accent_color')
+            if accent_color and accent_color.startswith('#'):
+                colors['accent'] = accent_color
+            
+            bg_color = style_properties.get('backgroundColor') or style_properties.get('background_color')
+            if bg_color and bg_color.startswith('#'):
+                colors['background'] = bg_color
+            
+            text_color = style_properties.get('textColor') or style_properties.get('text_color')
+            if text_color and text_color.startswith('#'):
+                colors['text'] = text_color
+        
+        # Helper function to convert hex color to RGB
+        def hex_to_rgb(hex_color):
+            hex_color = hex_color.lstrip('#')
+            return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        
+        # Create a blank presentation
+        prs = Presentation()
+        
+        # Set slide size to 16:9 aspect ratio
+        prs.slide_width = Inches(13.33)
+        prs.slide_height = Inches(7.5)
+        
+        # Create title slide layout
+        title_slide_layout = prs.slide_layouts[0]
+        
+        # Apply style to title slide
+        title_slide = prs.slides.add_slide(title_slide_layout)
+        title_slide.shapes.title.text = f"{template_style.capitalize()} Template"
+        title_slide.placeholders[1].text = "Created with Slideflow"
+        
+        # Style title text
+        title = title_slide.shapes.title
+        title.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+        title.text_frame.paragraphs[0].font.name = colors['fonts']['title']
+        title.text_frame.paragraphs[0].font.size = colors['font_sizes']['title']
+        title.text_frame.paragraphs[0].font.color.rgb = colors['colors']['title']
+        title.text_frame.paragraphs[0].font.bold = colors['styles']['title_bold']
+        
+        # Style subtitle text
+        subtitle = title_slide.placeholders[1]
+        subtitle.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+        subtitle.text_frame.paragraphs[0].font.name = colors['fonts']['body']
+        subtitle.text_frame.paragraphs[0].font.size = colors['font_sizes']['body']
+        subtitle.text_frame.paragraphs[0].font.color.rgb = colors['colors']['body']
+        subtitle.text_frame.paragraphs[0].font.bold = colors['styles']['body_bold']
+        
+        # Create content slide layout
+        content_slide_layout = prs.slide_layouts[1]
+        
+        # Apply style to content slide
+        content_slide = prs.slides.add_slide(content_slide_layout)
+        content_slide.shapes.title.text = "Content Slide Example"
+        content_text = content_slide.placeholders[1]
+        
+        # Add sample bullet points
+        content_text.text = "Sample Content"
+        
+        # Style title text
+        title = content_slide.shapes.title
+        title.text_frame.paragraphs[0].font.name = colors['fonts']['title']
+        title.text_frame.paragraphs[0].font.size = colors['font_sizes']['title']
+        title.text_frame.paragraphs[0].font.color.rgb = colors['colors']['title']
+        title.text_frame.paragraphs[0].font.bold = colors['styles']['title_bold']
+        
+        # Style content text
+        content_text.text_frame.paragraphs[0].font.name = colors['fonts']['body']
+        content_text.text_frame.paragraphs[0].font.size = colors['font_sizes']['body']
+        content_text.text_frame.paragraphs[0].font.color.rgb = colors['colors']['body']
+        content_text.text_frame.paragraphs[0].font.bold = colors['styles']['body_bold']
+        
+        # Save the template
+        prs.save(output_path)
+        
+        return output_path
+    except Exception as e:
+        print(f"Error creating base template: {str(e)}")
         raise 

@@ -83,6 +83,16 @@ templates = [
 async def root():
     return {"message": "Welcome to Slideflow API. Visit /docs for API documentation."}
 
+@app.get("/api/health")
+async def health_check():
+    """Simple health check endpoint to verify the API is running."""
+    return {
+        "status": "ok",
+        "service": "Slideflow API",
+        "version": "1.0.0",
+        "timestamp": int(time.time())
+    }
+
 @app.get("/api/templates")
 async def get_templates():
     """Get the list of available presentation templates."""
@@ -157,15 +167,68 @@ async def generate_presentation(
 async def export_presentation(data: Dict[str, Any]):
     """Export presentation in various formats (PPTX, DOCX, PDF)."""
     
-    content_data = data.get("contentData")
-    template_style = data.get("templateStyle", "corporate")
+    # Support both the old structure (contentData) and the new simplified structure
+    title = data.get("title")
+    slides = data.get("slides")
+    
+    # If we have title and slides directly in the payload, use them
+    if title and slides:
+        content_data = {
+            "title": title,
+            "slides": slides
+        }
+    else:
+        # Try to get contentData from the old structure
+        content_data = data.get("contentData")
+    
+    # Get template style information
+    template_style = data.get("template_style") or data.get("templateStyle", "corporate")
+    
+    # Get template customization details
+    template_details = data.get("templateDetails") or {}
+    
+    # Extract style properties directly from the root if available
+    style_props = {
+        "backgroundColor": data.get("backgroundColor"),
+        "textColor": data.get("textColor"),
+        "primaryColor": data.get("primaryColor"),
+        "secondaryColor": data.get("secondaryColor"),
+        "accentColor": data.get("accentColor"),
+        "fontFamily": data.get("fontFamily"),
+        "titleFontSize": data.get("titleFontSize"),
+        "contentFontSize": data.get("contentFontSize"),
+        # Also look for snake_case versions
+        "background_color": data.get("background_color"),
+        "text_color": data.get("text_color"),
+        "primary_color": data.get("primary_color"),
+        "secondary_color": data.get("secondary_color"),
+        "accent_color": data.get("accent_color"),
+        "font_family": data.get("font_family"),
+        "title_font_size": data.get("title_font_size"),
+        "content_font_size": data.get("content_font_size")
+    }
+    
+    # Filter out None values
+    style_props = {k: v for k, v in style_props.items() if v is not None}
+    
+    # Merge with template_details if provided
+    if template_details:
+        for key, value in template_details.items():
+            if value is not None:
+                style_props[key] = value
+    
     export_format = data.get("format", "pptx")
     presentation_id = data.get("presentation_id")
     background_images = data.get("backgroundImages", True)  # Default to True for backward compatibility
     image_placement = data.get("imagePlacement", "background")  # Default to background
     
+    # Log the received data for debugging
+    print(f"Export request received - Format: {export_format}, Template: {template_style}")
+    print(f"Style properties: {json.dumps(style_props, indent=2)}")
+    print(f"Content data: {json.dumps(content_data, indent=2) if content_data else 'None'}")
+    
     if not content_data:
-        raise HTTPException(status_code=400, detail="Content data is required")
+        raise HTTPException(status_code=400, detail="Content data is required (either as contentData or title+slides)")
     
     try:
         # If we have a presentation_id, try to retrieve the complete data with image prompts
@@ -187,6 +250,10 @@ async def export_presentation(data: Dict[str, Any]):
         # Use the complete data (with image prompts) if available, otherwise use the content_data
         export_data = complete_data if complete_data else content_data
         
+        # Add style properties to export_data
+        if style_props:
+            export_data["style"] = style_props
+        
         # Create a unique filename for this export
         timestamp = int(time.time())
         filename_base = f"presentation_{timestamp}"
@@ -199,7 +266,8 @@ async def export_presentation(data: Dict[str, Any]):
                 template_style, 
                 pptx_path, 
                 use_background_images=background_images,
-                image_placement=image_placement
+                image_placement=image_placement,
+                style_properties=style_props  # Pass style properties to the presentation builder
             )
             return FileResponse(
                 pptx_path, 
@@ -229,7 +297,8 @@ async def export_presentation(data: Dict[str, Any]):
                 template_style, 
                 pptx_path, 
                 use_background_images=background_images,
-                image_placement=image_placement
+                image_placement=image_placement,
+                style_properties=style_props  # Pass style properties to the presentation builder
             )
             # Then convert to PDF
             await export_to_pdf(export_data, template_style, pdf_path, pptx_path=pptx_path)

@@ -1,4 +1,3 @@
-
 import React, { useCallback, useState } from 'react';
 import { usePresentation } from '@/context/PresentationContext';
 import { Upload, FileText, X, FileType } from 'lucide-react';
@@ -88,9 +87,7 @@ const DocumentUpload = () => {
   };
   
   return (
-    <div className="my-6">
-      <h2 className="text-lg font-semibold mb-3">Upload a Document (Optional)</h2>
-      
+    <div className="my-2">
       {presentation.uploadedDocument ? (
         <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
           <div className="flex items-center space-x-3">

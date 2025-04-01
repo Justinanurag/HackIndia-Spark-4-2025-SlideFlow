@@ -305,12 +305,55 @@ export const PresentationProvider: React.FC<{ children: ReactNode }> = ({ childr
         return;
       }
 
-      // Call the API to generate presentation
+      // Find the selected template object
+      const selectedTemplateObj = availableTemplates.find(
+        template => template.id === presentation.selectedTemplate
+      );
+
+      // Get additional template styling information based on templateId
+      const templateStyles = getTemplateStyles(presentation.selectedTemplate);
+      
+      // Extract specific styling properties for direct use
+      const { 
+        backgroundColor, 
+        textColor, 
+        primaryColor, 
+        secondaryColor, 
+        accentColor,
+        fontFamily,
+        titleFontSize,
+        contentFontSize
+      } = templateStyles;
+
+      // Call the API to generate presentation with enhanced styling information
       const response = await apiService.generatePresentation({
         prompt: presentation.promptText,
         document: presentation.uploadedDocument || undefined,
         templateStyle: presentation.selectedTemplate,
         slideCount: presentation.slideCount,
+        // Include specific styling properties at the root level
+        backgroundColor,
+        textColor,
+        primaryColor,
+        secondaryColor,
+        accentColor,
+        fontFamily,
+        titleFontSize,
+        contentFontSize,
+        // Include detailed template information
+        templateDetails: {
+          ...selectedTemplateObj,
+          ...templateStyles,
+          // Provide both camelCase and snake_case for maximum compatibility
+          background_color: backgroundColor,
+          text_color: textColor,
+          primary_color: primaryColor,
+          secondary_color: secondaryColor,
+          accent_color: accentColor,
+          font_family: fontFamily,
+          title_font_size: titleFontSize,
+          content_font_size: contentFontSize
+        }
       });
 
       setGenerationProgress(100); // Complete progress
@@ -377,44 +420,340 @@ export const PresentationProvider: React.FC<{ children: ReactNode }> = ({ childr
         return;
       }
       
-      const response = await apiService.exportPresentation({
-        contentData: {
-          title: presentation.title || "Untitled Presentation",
-          description: presentation.description,
-          slides: presentation.slides,
-        },
-        templateStyle: presentation.selectedTemplate,
-        format: format,
-        imagePlacement: 'none',
-      });
+      // Log export attempt with details
+      console.log(`Attempting to export presentation in ${format} format with styling`);
+      console.log(`Template: ${presentation.selectedTemplate}`);
+      console.log(`Slide count: ${presentation.slides.length}`);
       
-      // Handle response from the export API
-      if (response.download_url) {
-        // Create a temporary link and click it to initiate download
-        const downloadLink = document.createElement('a');
-        downloadLink.href = response.download_url;
-        downloadLink.target = '_blank';
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+      // Get full template style details
+      const templateStyles = getTemplateStyles(presentation.selectedTemplate);
+      console.log("Template styles:", templateStyles);
+      
+      // Find the selected template object from available templates
+      const selectedTemplateObj = availableTemplates.find(
+        template => template.id === presentation.selectedTemplate
+      ) || availableTemplates[0];
+      
+      // Create content structure for export that preserves all slide content
+      const contentData = {
+        title: presentation.title || "Untitled Presentation",
+        slides: presentation.slides.map(slide => {
+          // Create a complete slide object with all relevant properties
+          const completeSlide: any = {
+            type: slide.type,
+            title: slide.title || "",
+          };
+          
+          // Add content based on slide type
+          if (slide.content) {
+            completeSlide.content = slide.content;
+          }
+          
+          // For bullet slides, make sure to include bullets array
+          if (slide.bullets && slide.bullets.length > 0) {
+            completeSlide.bullets = slide.bullets;
+          }
+          
+          // For quote slides, include quote and author
+          if (slide.quote) {
+            completeSlide.quote = slide.quote;
+            if (slide.author) {
+              completeSlide.author = slide.author;
+            }
+          }
+          
+          // For image slides, include image URL if available
+          if (slide.imageUrl) {
+            completeSlide.image_url = slide.imageUrl;
+          }
+          
+          // For two-column slides, include column content
+          if (slide.leftContent) {
+            completeSlide.left_content = slide.leftContent;
+          }
+          
+          if (slide.rightContent) {
+            completeSlide.right_content = slide.rightContent;
+          }
+          
+          return completeSlide;
+        })
+      };
+      
+      try {
+        // Attempt the export with complete styling data
+        const response = await apiService.exportPresentation({
+          contentData: contentData,
+          templateStyle: presentation.selectedTemplate,
+          format: format,
+          // Include complete template details with both the styles and template object
+          templateDetails: {
+            ...templateStyles,
+            ...selectedTemplateObj,
+            // Ensure these critical properties are explicitly set
+            template_id: presentation.selectedTemplate,
+            template_name: selectedTemplateObj.name,
+            template_style: presentation.selectedTemplate,
+            // Ensure both camelCase and snake_case versions are included
+            primaryColor: selectedTemplateObj.primaryColor,
+            primary_color: selectedTemplateObj.primaryColor,
+            secondaryColor: selectedTemplateObj.secondaryColor,
+            secondary_color: selectedTemplateObj.secondaryColor,
+            accentColor: selectedTemplateObj.accentColor,
+            accent_color: selectedTemplateObj.accentColor,
+            backgroundColor: templateStyles.backgroundColor,
+            background_color: templateStyles.backgroundColor,
+            textColor: templateStyles.textColor,
+            text_color: templateStyles.textColor
+          }
+        });
         
         toast({
           title: "Export Successful",
           description: `Your presentation has been exported as ${format.toUpperCase()}.`,
         });
-      } else {
-        throw new Error("Export failed. No download URL received.");
+      } catch (error) {
+        console.error("Export error:", error);
+        
+        let errorMessage = "There was an error exporting your presentation.";
+        
+        // If error contains a specific message, display it to the user
+        if (error instanceof Error) {
+          errorMessage = error.message || errorMessage;
+        }
+        
+        toast({
+          title: "Export Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        
+        // Try a direct debug export as a fallback
+        console.log("Attempting direct debug export as fallback...");
+        const debugResult = await apiService.debugExportPresentation(format);
+        
+        if (debugResult.success) {
+          toast({
+            title: "Direct Export Succeeded",
+            description: "Used simplified format. Check console for details.",
+          });
+        }
       }
-    } catch (error) {
-      console.error("Export error:", error);
-      toast({
-        title: "Export Failed",
-        description: `There was an error exporting your presentation. Please try again.`,
-        variant: "destructive",
-      });
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Helper function to get detailed styling information for each template
+  const getTemplateStyles = (templateId: TemplateType) => {
+    // Find the template object to get color values
+    const templateObj = availableTemplates.find(t => t.id === templateId) || availableTemplates[0];
+    
+    const templateStyling = {
+      corporate: {
+        fontFamily: 'Roboto, Arial, sans-serif', // Modern & professional
+        titleFontSize: '44pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#002B5B',  // Navy Blue
+        backgroundColor: '#FFFFFF',  // White
+        accentColor: '#4589FF',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      creative: {
+        fontFamily: 'Lobster, Montserrat, sans-serif', // Playful & artistic
+        titleFontSize: '48pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#5A189A',  // Deep Purple
+        backgroundColor: '#F5F5F5',  // Light Gray
+        accentColor: '#FFCC00',
+        gradient: 'linear-gradient(135deg, #FF3366 0%, #9C27B0 100%)',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      minimalist: {
+        fontFamily: 'Futura, Helvetica Neue, Arial, sans-serif', // Clean & geometric
+        titleFontSize: '42pt',
+        contentFontSize: '26pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#444444',  // Dark Gray
+        backgroundColor: '#FFFFFF',  // White
+        accentColor: '#BDBDBD',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      academic: {
+        fontFamily: 'Times New Roman, Georgia, serif', // Traditional & scholarly
+        titleFontSize: '44pt',
+        contentFontSize: '26pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#1C3D6E',  // Dark Blue
+        backgroundColor: '#FAF3E0',  // Light Beige
+        accentColor: '#4DD0E1',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      marketing: {
+        fontFamily: 'Impact, Raleway, sans-serif', // Bold & attention-grabbing
+        titleFontSize: '46pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#E63946',  // Bright Red
+        backgroundColor: '#FFFFFF',  // White
+        accentColor: '#FFC107',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      techStartup: {
+        fontFamily: 'Orbitron, Exo, Ubuntu, sans-serif', // Futuristic & digital
+        titleFontSize: '48pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'semi-bold',
+        contentFontWeight: 'regular',
+        textColor: '#00A8E8',  // Electric Blue
+        backgroundColor: '#1E1E1E',  // Dark Gray
+        accentColor: '#2ECC71',
+        gradient: 'linear-gradient(135deg, #004e92 0%, #8a2be2 100%)',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      businessPitch: {
+        fontFamily: 'Baskerville, Proxima Nova, Lato, serif', // Classic & high-end
+        titleFontSize: '46pt',
+        contentFontSize: '30pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#001F3F',  // Dark Navy
+        backgroundColor: '#FFFFFF',  // White
+        accentColor: '#444444',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      futuristic: {
+        fontFamily: 'Audiowide, Orbitron, Rajdhani, sans-serif', // Sci-fi & techy
+        titleFontSize: '50pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'bold',
+        titleTextTransform: 'uppercase',
+        contentFontWeight: 'regular',
+        textColor: '#00FFFF',  // Neon Blue
+        backgroundColor: '#000000',  // Black
+        accentColor: '#00E5FF',
+        gradient: 'linear-gradient(135deg, #000000 0%, #240046 100%)',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      elegant: {
+        fontFamily: 'Playfair Display, Cormorant, Cinzel, serif', // Sophisticated & stylish
+        titleFontSize: '50pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        titleFontStyle: 'italic',
+        textColor: '#D4AF37',  // Gold
+        backgroundColor: '#000000',  // Black
+        accentColor: '#4A0D37',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      healthcare: {
+        fontFamily: 'Verdana, Nunito, Open Sans, sans-serif', // Clean & readable
+        titleFontSize: '44pt',
+        contentFontSize: '26pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#007BFF',  // Medical Blue
+        backgroundColor: '#FFFFFF',  // White
+        accentColor: '#00897B',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      finance: {
+        fontFamily: 'Garamond, Franklin Gothic, Source Sans Pro, serif', // Trustworthy & elegant
+        titleFontSize: '46pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#004B23',  // Deep Green
+        backgroundColor: '#F4F4F4',  // Light Gray
+        accentColor: '#2A3D66',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      event: {
+        fontFamily: 'Oswald, Abril Fatface, Raleway, sans-serif', // Strong & modern
+        titleFontSize: '52pt',
+        contentFontSize: '30pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#E63946',  // Vibrant Red
+        backgroundColor: '#FFFFFF',  // White
+        accentColor: '#007BFF',
+        gradient: 'linear-gradient(135deg, #000033 0%, #4B0082 100%)',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      elearning: {
+        fontFamily: '"Comic Sans MS", Merriweather, Quicksand, sans-serif', // Casual & friendly
+        titleFontSize: '42pt',
+        contentFontSize: '26pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#004D40',  // Dark Green
+        backgroundColor: '#FFFFFF',  // White
+        accentColor: '#333333',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      },
+      travel: {
+        fontFamily: 'Pacifico, Lobster, Raleway, sans-serif', // Fun & adventurous
+        titleFontSize: '48pt',
+        contentFontSize: '28pt',
+        titleFontWeight: 'bold',
+        contentFontWeight: 'regular',
+        textColor: '#1E90FF',  // Ocean Blue
+        backgroundColor: '#87CEFA',  // Light Sky Blue
+        accentColor: '#8B4513',
+        gradient: 'none',
+        primaryColor: templateObj.primaryColor,
+        secondaryColor: templateObj.secondaryColor
+      }
+    };
+
+    // Create style object with the template-specific styles
+    const templateSpecificStyles = templateStyling[templateId] || templateStyling.corporate;
+    
+    // Ensure all color properties are properly set and aligned
+    return {
+      ...templateSpecificStyles,
+      // Ensure we have both camelCase and snake_case versions for compatibility
+      primaryColor: templateObj.primaryColor,
+      primary_color: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
+      secondary_color: templateObj.secondaryColor,
+      accentColor: templateObj.accentColor,
+      accent_color: templateObj.accentColor,
+      backgroundColor: templateSpecificStyles.backgroundColor,
+      background_color: templateSpecificStyles.backgroundColor,
+      textColor: templateSpecificStyles.textColor,
+      text_color: templateSpecificStyles.textColor,
+    };
   };
 
   return (
