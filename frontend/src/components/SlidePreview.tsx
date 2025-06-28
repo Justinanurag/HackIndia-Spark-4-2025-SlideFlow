@@ -1,369 +1,320 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { usePresentation, Slide, TemplateType } from '@/context/PresentationContext';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Check, Move } from 'lucide-react';
+import { Move } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Import function to get full template styles
-const getTemplateStyles = (templateId: TemplateType) => {
-  const templateStyling = {
+// Define interfaces for template styles (aligned with new context)
+interface TemplateStyle {
+  fontFamily: string;
+  titleFontSize: string;
+  contentFontSize: string;
+  titleFontWeight: string;
+  contentFontWeight: string;
+  textColor: string;
+  backgroundColor: string;
+  accentColor: string;
+  primaryColor: string;
+  secondaryColor: string;
+  titleFontStyle?: string;
+  titleTextTransform?: string;
+  gradient?: string;
+}
+
+// Get template styles (aligned with new context's getTemplateStyles)
+const getTemplateStyles = (templateId: TemplateType): TemplateStyle => {
+  const { availableTemplates } = usePresentation();
+  const templateObj = availableTemplates.find(t => t.id === templateId) || availableTemplates[0];
+
+  const templateStyling: Record<TemplateType, TemplateStyle> = {
     corporate: {
-      fontFamily: 'Roboto, Arial, sans-serif', // Modern & professional
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#002B5B', // Navy Blue
-      backgroundColor: '#FFFFFF', // White
+      fontFamily: 'Roboto, Arial, sans-serif',
+      titleFontSize: '44pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#002B5B',
+      backgroundColor: '#FFFFFF',
       accentColor: '#4589FF',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     creative: {
-      fontFamily: 'Lobster, Montserrat, sans-serif', // Playful & artistic 
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#5A189A', // Deep Purple
-      backgroundColor: '#F5F5F5', // Light Gray
+      fontFamily: 'Lobster, Montserrat, sans-serif',
+      titleFontSize: '48pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#5A189A',
+      backgroundColor: '#F5F5F5',
       accentColor: '#FFCC00',
+      gradient: 'linear-gradient(135deg, #FF3366 0%, #9C27B0 100%)',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     academic: {
-      fontFamily: '"Times New Roman", Georgia, serif', // Traditional & scholarly
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#1C3D6E', // Dark Blue
-      backgroundColor: '#FAF3E0', // Light Beige
+      fontFamily: 'Times New Roman, Georgia, serif',
+      titleFontSize: '44pt',
+      contentFontSize: '26pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#1C3D6E',
+      backgroundColor: '#FAF3E0',
       accentColor: '#4DD0E1',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     marketing: {
-      fontFamily: 'Impact, Raleway, sans-serif', // Bold & attention-grabbing
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#E63946', // Bright Red
-      backgroundColor: '#FFFFFF', // White
+      fontFamily: 'Impact, Raleway, sans-serif',
+      titleFontSize: '46pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#E63946',
+      backgroundColor: '#FFFFFF',
       accentColor: '#FFC107',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     minimalist: {
-      fontFamily: 'Futura, "Helvetica Neue", Arial, sans-serif', // Clean & geometric
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#444444', // Dark Gray
-      backgroundColor: '#FFFFFF', // White
+      fontFamily: 'Futura, Helvetica Neue, Arial, sans-serif',
+      titleFontSize: '42pt',
+      contentFontSize: '26pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#444444',
+      backgroundColor: '#FFFFFF',
       accentColor: '#BDBDBD',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     techStartup: {
-      fontFamily: 'Orbitron, Exo, system-ui, sans-serif', // Futuristic & digital
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '600',
-      contentFontWeight: '400',
-      textColor: '#00A8E8', // Electric Blue
-      backgroundColor: '#1E1E1E', // Dark Gray
+      fontFamily: 'Orbitron, Exo, Ubuntu, sans-serif',
+      titleFontSize: '48pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'semi-bold',
+      contentFontWeight: 'regular',
+      textColor: '#00A8E8',
+      backgroundColor: '#1E1E1E',
       accentColor: '#2ECC71',
+      gradient: 'linear-gradient(135deg, #004e92 0%, #8a2be2 100%)',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     businessPitch: {
-      fontFamily: 'Baskerville, Lato, system-ui, serif', // Classic & high-end
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#001F3F', // Dark Navy
-      backgroundColor: '#FFFFFF', // White
+      fontFamily: 'Baskerville, Proxima Nova, Lato, serif',
+      titleFontSize: '46pt',
+      contentFontSize: '30pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#001F3F',
+      backgroundColor: '#FFFFFF',
       accentColor: '#444444',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     futuristic: {
-      fontFamily: 'Audiowide, Orbitron, system-ui, sans-serif', // Sci-fi & techy
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
+      fontFamily: 'Audiowide, Orbitron, Rajdhani, sans-serif',
+      titleFontSize: '50pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
       titleTextTransform: 'uppercase',
-      textColor: '#00FFFF', // Neon Blue
-      backgroundColor: '#000000', // Black
+      textColor: '#00FFFF',
+      backgroundColor: '#000000',
       accentColor: '#00E5FF',
+      gradient: 'linear-gradient(135deg, #000000 0%, #240046 100%)',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     elegant: {
-      fontFamily: '"Playfair Display", serif', // Sophisticated & stylish
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
+      fontFamily: 'Playfair Display, Cormorant, Cinzel, serif',
+      titleFontSize: '50pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
       titleFontStyle: 'italic',
-      textColor: '#D4AF37', // Gold
-      backgroundColor: '#000000', // Black
+      textColor: '#D4AF37',
+      backgroundColor: '#000000',
       accentColor: '#4A0D37',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     healthcare: {
-      fontFamily: 'Verdana, Nunito, "Open Sans", sans-serif', // Clean & readable
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '600',
-      contentFontWeight: '400',
-      textColor: '#007BFF', // Medical Blue
-      backgroundColor: '#FFFFFF', // White
+      fontFamily: 'Verdana, Nunito, Open Sans, sans-serif',
+      titleFontSize: '44pt',
+      contentFontSize: '26pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#007BFF',
+      backgroundColor: '#FFFFFF',
       accentColor: '#00897B',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     finance: {
-      fontFamily: 'Garamond, "Source Sans Pro", system-ui, serif', // Trustworthy & elegant
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#004B23', // Deep Green
-      backgroundColor: '#F4F4F4', // Light Gray
+      fontFamily: 'Garamond, Franklin Gothic, Source Sans Pro, serif',
+      titleFontSize: '46pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#004B23',
+      backgroundColor: '#F4F4F4',
       accentColor: '#2A3D66',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     event: {
-      fontFamily: 'Oswald, Raleway, system-ui, sans-serif', // Strong & modern
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '700',
-      contentFontWeight: '400',
-      textColor: '#E63946', // Vibrant Red
-      backgroundColor: '#FFFFFF', // White
+      fontFamily: 'Oswald, Abril Fatface, Raleway, sans-serif',
+      titleFontSize: '52pt',
+      contentFontSize: '30pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#E63946',
+      backgroundColor: '#FFFFFF',
       accentColor: '#007BFF',
+      gradient: 'linear-gradient(135deg, #000033 0%, #4B0082 100%)',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     elearning: {
-      fontFamily: '"Comic Sans MS", Merriweather, "Open Sans", sans-serif', // Casual & friendly
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '600',
-      contentFontWeight: '400',
-      textColor: '#004D40', // Dark Green
-      backgroundColor: '#FFFFFF', // White
+      fontFamily: '"Comic Sans MS", Merriweather, Quicksand, sans-serif',
+      titleFontSize: '42pt',
+      contentFontSize: '26pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#004D40',
+      backgroundColor: '#FFFFFF',
       accentColor: '#333333',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
     travel: {
-      fontFamily: 'Pacifico, Raleway, system-ui, sans-serif', // Fun & adventurous
-      titleFontSize: '1.25rem',
-      contentFontSize: '0.875rem',
-      titleFontWeight: '600',
-      contentFontWeight: '400',
-      textColor: '#1E90FF', // Ocean Blue
-      backgroundColor: '#87CEFA', // Light Sky Blue
+      fontFamily: 'Pacifico, Lobster, Raleway, sans-serif',
+      titleFontSize: '48pt',
+      contentFontSize: '28pt',
+      titleFontWeight: 'bold',
+      contentFontWeight: 'regular',
+      textColor: '#1E90FF',
+      backgroundColor: '#87CEFA',
       accentColor: '#8B4513',
+      primaryColor: templateObj.primaryColor,
+      secondaryColor: templateObj.secondaryColor,
     },
   };
 
   return templateStyling[templateId] || templateStyling.corporate;
 };
 
-const SlidePreview = () => {
-  const { presentation } = usePresentation();
+const SlidePreview: React.FC = () => {
+  const { presentation, reorderSlides } = usePresentation();
   const { slides, selectedTemplate } = presentation;
 
-  // Helper function to get template colors
-  const getTemplateColors = (templateId: TemplateType) => {
-    const templates = {
-      corporate: {
-        primary: '#002B5B',  // Navy Blue
-        secondary: '#6F6F6F',
-        accent: '#4589FF',
-        background: '#FFFFFF',  // White
-        text: '#002B5B',  // Navy Blue
-      },
-      creative: {
-        primary: '#5A189A',  // Deep Purple
-        secondary: '#9C27B0',
-        accent: '#FFCC00',
-        background: '#F5F5F5',  // Light Gray
-        text: '#5A189A',  // Deep Purple
-      },
-      academic: {
-        primary: '#1C3D6E',  // Dark Blue
-        secondary: '#00897B',
-        accent: '#4DD0E1',
-        background: '#FAF3E0',  // Light Beige
-        text: '#1C3D6E',  // Dark Blue
-      },
-      marketing: {
-        primary: '#E63946',  // Bright Red
-        secondary: '#FF9800',
-        accent: '#FFC107',
-        background: '#FFFFFF',  // White
-        text: '#E63946',  // Bright Red
-      },
-      minimalist: {
-        primary: '#444444',  // Dark Gray
-        secondary: '#757575',
-        accent: '#BDBDBD',
-        background: '#FFFFFF',  // White
-        text: '#444444',  // Dark Gray
-      },
-      techStartup: {
-        primary: '#00A8E8',  // Electric Blue
-        secondary: '#1E1E1E',
-        accent: '#2ECC71',
-        background: '#1E1E1E',  // Dark Gray
-        text: '#00A8E8',  // Electric Blue
-      },
-      businessPitch: {
-        primary: '#001F3F',  // Dark Navy
-        secondary: '#444444',
-        accent: '#102A43',
-        background: '#FFFFFF',  // White
-        text: '#001F3F',  // Dark Navy
-      },
-      futuristic: {
-        primary: '#00FFFF',  // Neon Blue
-        secondary: '#00E5FF',
-        accent: '#240046',
-        background: '#000000',  // Black
-        text: '#00FFFF',  // Neon Blue
-      },
-      elegant: {
-        primary: '#D4AF37',  // Gold
-        secondary: '#4A0D37',
-        accent: '#1B1B2F',
-        background: '#000000',  // Black
-        text: '#D4AF37',  // Gold
-      },
-      healthcare: {
-        primary: '#007BFF',  // Medical Blue
-        secondary: '#00897B',
-        accent: '#E3F2FD',
-        background: '#FFFFFF',  // White
-        text: '#007BFF',  // Medical Blue
-      },
-      finance: {
-        primary: '#004B23',  // Deep Green
-        secondary: '#2A3D66',
-        accent: '#F4F4F4',
-        background: '#F4F4F4',  // Light Gray
-        text: '#004B23',  // Deep Green
-      },
-      event: {
-        primary: '#E63946',  // Vibrant Red
-        secondary: '#007BFF',
-        accent: '#4B0082',
-        background: '#FFFFFF',  // White
-        text: '#E63946',  // Vibrant Red
-      },
-      elearning: {
-        primary: '#004D40',  // Dark Green
-        secondary: '#333333',
-        accent: '#FFF8E1',
-        background: '#FFFFFF',  // White
-        text: '#004D40',  // Dark Green
-      },
-      travel: {
-        primary: '#1E90FF',  // Ocean Blue
-        secondary: '#8B4513',
-        accent: '#F4E1C6',
-        background: '#87CEFA',  // Light Sky Blue
-        text: '#1E90FF',  // Ocean Blue
-      },
-    };
-    
-    return templates[templateId];
-  };
+  // Memoize template styles
+  const templateStyles = useMemo(() => getTemplateStyles(selectedTemplate), [selectedTemplate]);
 
-  // Get all template color properties
-  const templateColors = getTemplateColors(selectedTemplate);
-  
-  // Get complete template styling
-  const templateStyles = getTemplateStyles(selectedTemplate);
+  // Common styles
+  const titleStyle = useMemo(() => ({
+    color: templateStyles.primaryColor,
+    fontFamily: templateStyles.fontFamily,
+    fontSize: templateStyles.titleFontSize,
+    fontWeight: templateStyles.titleFontWeight,
+    fontStyle: templateStyles.titleFontStyle || 'normal',
+    textTransform: templateStyles.titleTextTransform || 'none',
+  }), [templateStyles]);
 
+  const contentStyle = useMemo(() => ({
+    color: templateStyles.textColor,
+    fontFamily: templateStyles.fontFamily,
+    fontSize: templateStyles.contentFontSize,
+    fontWeight: templateStyles.contentFontWeight,
+  }), [templateStyles]);
+
+  // Render slide content based on type
   const renderSlideContent = (slide: Slide) => {
-    // Define common title styling
-    const titleStyle = {
-      color: templateColors.primary,
-      fontFamily: templateStyles.fontFamily,
-      fontSize: templateStyles.titleFontSize,
-      fontWeight: templateStyles.titleFontWeight,
-      fontStyle: templateStyles.titleFontStyle || 'normal',
-      textTransform: templateStyles.titleTextTransform || 'none',
-    };
-    
-    // Define common content styling
-    const contentStyle = {
-      color: templateColors.text,
-      fontFamily: templateStyles.fontFamily,
-      fontSize: templateStyles.contentFontSize,
-      fontWeight: templateStyles.contentFontWeight,
-    };
-
     switch (slide.type) {
       case 'title':
         return (
           <div 
             className="flex flex-col items-center justify-center h-full text-center p-4"
-            style={{ color: templateColors.text, fontFamily: templateStyles.fontFamily }}
+            style={{ color: templateStyles.textColor, fontFamily: templateStyles.fontFamily }}
+            role="region"
+            aria-label="Title slide"
           >
             <h1 
-              className="text-lg font-bold mb-2"
+              className="font-bold mb-2"
               style={titleStyle}
             >
               {slide.title || 'Title Slide'}
             </h1>
             <p 
-              className="text-xs"
+              className="text-sm"
               style={contentStyle}
             >
               {slide.content || 'Subtitle or additional context'}
             </p>
           </div>
         );
-        
+
       case 'content':
         return (
           <div 
             className="flex flex-col h-full p-4"
             style={{ fontFamily: templateStyles.fontFamily }}
+            role="region"
+            aria-label="Content slide"
           >
             <h2 
-              className="text-sm font-bold mb-1"
+              className="font-bold mb-1"
               style={titleStyle}
             >
               {slide.title || 'Content Slide'}
             </h2>
             <div 
-              className="text-xs overflow-hidden"
+              className="text-md overflow-hidden"
               style={contentStyle}
             >
-              {slide.content || 'Slide content goes here'}
+              {slide.bullets || 'Slide content goes here'}
             </div>
           </div>
         );
-        
+
       case 'bullets':
         return (
           <div 
             className="flex flex-col h-full p-4"
             style={{ fontFamily: templateStyles.fontFamily }}
+            role="region"
+            aria-label="Bullet points slide"
           >
             <h2 
-              className="text-sm font-bold mb-1"
+              className="font-bold mb-1"
               style={titleStyle}
             >
               {slide.title || 'Bullet Points'}
             </h2>
             <ul 
-              className="text-xs list-disc pl-4 space-y-1"
+              className="text-sm list-disc pl-4 space-y-1"
               style={contentStyle}
             >
               {slide.bullets?.map((bullet, idx) => (
-                <li key={idx}>{bullet}</li>
+                <li key={`bullet-${slide.id}-${idx}`}>{bullet}</li>
               )) || <li>Bullet point content</li>}
             </ul>
           </div>
         );
-        
+
       case 'image':
         return (
           <div 
             className="flex flex-col h-full p-4"
             style={{ fontFamily: templateStyles.fontFamily }}
+            role="region"
+            aria-label="Image slide"
           >
             <h2 
-              className="text-sm font-bold mb-1"
+              className="font-bold mb-1"
               style={titleStyle}
             >
               {slide.title || 'Image Slide'}
@@ -376,12 +327,14 @@ const SlidePreview = () => {
                   className="max-h-full max-w-full object-contain"
                 />
               ) : (
-                <div className="text-xs text-muted-foreground">Image placeholder</div>
+                <div className="text-sm text-muted-foreground" aria-label="Image placeholder">
+                  Image placeholder
+                </div>
               )}
             </div>
             {slide.content && (
               <p 
-                className="text-xs mt-1"
+                className="text-sm mt-1"
                 style={contentStyle}
               >
                 {slide.content}
@@ -389,17 +342,19 @@ const SlidePreview = () => {
             )}
           </div>
         );
-        
+
       case 'quote':
         return (
           <div 
             className="flex flex-col items-center justify-center h-full text-center p-4"
-            style={{ color: templateColors.text, fontFamily: templateStyles.fontFamily }}
+            style={{ color: templateStyles.textColor, fontFamily: templateStyles.fontFamily }}
+            role="region"
+            aria-label="Quote slide"
           >
             <blockquote 
-              className="text-xs italic mb-2"
+              className="text-sm italic mb-2"
               style={{ 
-                color: templateColors.secondary,
+                color: templateStyles.secondaryColor,
                 fontFamily: templateStyles.fontFamily,
                 fontSize: templateStyles.contentFontSize
               }}
@@ -408,7 +363,7 @@ const SlidePreview = () => {
             </blockquote>
             {slide.author && (
               <cite 
-                className="text-xs font-medium"
+                className="text-sm font-medium"
                 style={contentStyle}
               >
                 — {slide.author}
@@ -416,28 +371,30 @@ const SlidePreview = () => {
             )}
           </div>
         );
-        
+
       case 'two-column':
         return (
           <div 
             className="flex flex-col h-full p-4"
             style={{ fontFamily: templateStyles.fontFamily }}
+            role="region"
+            aria-label="Two column slide"
           >
             <h2 
-              className="text-sm font-bold mb-1"
+              className="font-bold mb-1"
               style={titleStyle}
             >
               {slide.title || 'Two Column Layout'}
             </h2>
             <div className="flex flex-1 gap-2">
               <div 
-                className="flex-1 text-xs overflow-hidden border-r pr-2"
+                className="flex-1 text-sm overflow-hidden border-r pr-2"
                 style={contentStyle}
               >
                 {slide.leftContent || 'Left column content'}
               </div>
               <div 
-                className="flex-1 text-xs overflow-hidden pl-2"
+                className="flex-1 text-sm overflow-hidden pl-2"
                 style={contentStyle}
               >
                 {slide.rightContent || 'Right column content'}
@@ -445,26 +402,38 @@ const SlidePreview = () => {
             </div>
           </div>
         );
-        
+
       default:
-        return <div className="p-4 text-xs">Slide content</div>;
+        return (
+          <div 
+            className="p-4 text-sm"
+            role="region"
+            aria-label="Default slide"
+          >
+            Slide content
+          </div>
+        );
     }
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" role="main" aria-label="Slide preview section">
       <Tabs defaultValue="preview" className="w-full">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">Preview</h2>
           <TabsList>
-            <TabsTrigger value="preview">Slides</TabsTrigger>
-            <TabsTrigger value="outline">Outline</TabsTrigger>
+            <TabsTrigger value="preview" aria-label="View slides">Slides</TabsTrigger>
+            <TabsTrigger value="outline" aria-label="View outline">Outline</TabsTrigger>
           </TabsList>
         </div>
 
         <TabsContent value="preview" className="mt-4 flex-1">
           {slides.length === 0 ? (
-            <div className="flex items-center justify-center h-96 border rounded-lg bg-muted/30">
+            <div 
+              className="flex items-center justify-center h-96 border rounded-lg bg-muted/30"
+              role="alert"
+              aria-label="No slides message"
+            >
               <div className="text-center text-muted-foreground">
                 <p className="mb-2">No slides generated yet</p>
                 <p className="text-sm">Enter a prompt and click "Generate Presentation"</p>
@@ -480,16 +449,22 @@ const SlidePreview = () => {
                         Slide {index + 1}
                       </span>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Move className="h-4 w-4 cursor-move text-muted-foreground" />
+                        <Move 
+                          className="h-4 w-4 cursor-move text-muted-foreground" 
+                          aria-label="Drag to reorder slide"
+                          onClick={() => reorderSlides(index, index)} // Placeholder for drag-and-drop
+                        />
                       </div>
                     </div>
                     <Card 
                       className="slide-card overflow-hidden"
                       style={{ 
-                        backgroundColor: templateColors.background,
-                        borderColor: `${templateColors.primary}20`,
-                        backgroundImage: templateStyles.gradient !== 'none' ? templateStyles.gradient : 'none'
+                        backgroundColor: templateStyles.backgroundColor,
+                        borderColor: `${templateStyles.primaryColor}20`,
+                        backgroundImage: templateStyles.gradient || 'none'
                       }}
+                      role="group"
+                      aria-label={`Slide ${index + 1}`}
                     >
                       {renderSlideContent(slide)}
                     </Card>
@@ -505,9 +480,15 @@ const SlidePreview = () => {
             <div 
               className="space-y-4"
               style={{ fontFamily: templateStyles.fontFamily }}
+              role="list"
+              aria-label="Slide outline"
             >
               {slides.length === 0 ? (
-                <div className="flex items-center justify-center h-96 border rounded-lg bg-muted/30">
+                <div 
+                  className="flex items-center justify-center h-96 border rounded-lg bg-muted/30"
+                  role="alert"
+                  aria-label="No slides message"
+                >
                   <div className="text-center text-muted-foreground">
                     <p className="mb-2">No slides generated yet</p>
                     <p className="text-sm">Enter a prompt and click "Generate Presentation"</p>
@@ -515,14 +496,15 @@ const SlidePreview = () => {
                 </div>
               ) : (
                 slides.map((slide, index) => (
-                  <Card key={slide.id} className="p-4">
+                  <Card key={slide.id} className="p-4" role="listitem">
                     <div className="flex items-start gap-3">
                       <div 
                         className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium"
                         style={{
-                          backgroundColor: templateColors.primary,
+                          backgroundColor: templateStyles.primaryColor,
                           color: '#ffffff'
                         }}
+                        aria-label={`Slide number ${index + 1}`}
                       >
                         {index + 1}
                       </div>
@@ -530,7 +512,7 @@ const SlidePreview = () => {
                         <h3 
                           className="font-medium text-sm mb-1"
                           style={{
-                            color: templateColors.primary,
+                            color: templateStyles.primaryColor,
                             fontWeight: templateStyles.titleFontWeight,
                             fontStyle: templateStyles.titleFontStyle || 'normal',
                             textTransform: templateStyles.titleTextTransform || 'none'
@@ -545,9 +527,10 @@ const SlidePreview = () => {
                             style={{
                               fontWeight: templateStyles.contentFontWeight
                             }}
+                            role="list"
                           >
                             {slide.bullets.map((bullet, idx) => (
-                              <li key={idx} className="truncate">{bullet}</li>
+                              <li key={`bullet-outline-${slide.id}-${idx}`} className="truncate">{bullet}</li>
                             ))}
                           </ul>
                         )}
@@ -586,4 +569,4 @@ const SlidePreview = () => {
   );
 };
 
-export default SlidePreview;
+export default React.memo(SlidePreview);
